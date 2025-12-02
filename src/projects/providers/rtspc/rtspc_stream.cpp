@@ -667,6 +667,14 @@ namespace pvd
 		// Configure SRTP if needed
 		if (_use_srtp && _srtp_transport != nullptr)
 		{
+			// Validate we have media descriptions
+			if (media_desc_list.empty())
+			{
+				SetState(State::ERROR);
+				logte("SRTP is enabled but no media descriptions found in SDP");
+				return false;
+			}
+
 			// Get crypto attribute from the first media description
 			auto first_media_desc = media_desc_list[0];
 			auto crypto_attr = first_media_desc->GetFirstCrypto();
@@ -678,8 +686,8 @@ namespace pvd
 				return false;
 			}
 
-			// Parse crypto suite
-			uint64_t crypto_suite = 0;
+			// Parse crypto suite - default to invalid value
+			uint64_t crypto_suite = 0xFFFFFFFFFFFFFFFF;
 			if (crypto_attr->crypto_suite == "AES_CM_128_HMAC_SHA1_80")
 			{
 				crypto_suite = SRTP_AES128_CM_SHA1_80;
@@ -692,7 +700,9 @@ namespace pvd
 			{
 				crypto_suite = SRTP_AEAD_AES_128_GCM;
 			}
-			else
+			
+			// Validate that a supported crypto suite was found
+			if (crypto_suite == 0xFFFFFFFFFFFFFFFF)
 			{
 				SetState(State::ERROR);
 				logte("Unsupported SRTP crypto suite: %s", crypto_attr->crypto_suite.CStr());

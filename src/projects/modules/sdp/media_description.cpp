@@ -611,7 +611,7 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 			{
 				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
 				auto match = SDPRegexPattern::GetInstance()->MatchCrypto(content.c_str());
-				if (match.GetGroupCount() >= 3 + 1)
+				if (match.GetGroupCount() >= 4)
 				{
 					AddCrypto(
 						ov::Converter::ToUInt32(match.GetGroupAt(1).GetValue().CStr()),

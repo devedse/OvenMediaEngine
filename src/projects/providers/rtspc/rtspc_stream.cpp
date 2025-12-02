@@ -713,18 +713,20 @@ namespace pvd
 			// SRTP key material: master key (16 bytes) + master salt (14 bytes) = 30 bytes
 			constexpr size_t SRTP_KEY_MATERIAL_LENGTH = 30;
 			auto key_data = ov::Base64::Decode(crypto_attr->key_params);
-			if (key_data == nullptr || key_data->GetLength() < SRTP_KEY_MATERIAL_LENGTH)
+			if (key_data == nullptr || key_data->GetLength() != SRTP_KEY_MATERIAL_LENGTH)
 			{
 				SetState(State::ERROR);
-				logte("Failed to decode SRTP key or key is too short (expected at least %zu bytes)", SRTP_KEY_MATERIAL_LENGTH);
+				logte("Failed to decode SRTP key or invalid key length (expected exactly %zu bytes, got %zu)", 
+					  SRTP_KEY_MATERIAL_LENGTH, 
+					  key_data ? key_data->GetLength() : 0);
 				return false;
 			}
 
 			// For RTSP SRTP (RFC 4568), the same key material is used for both sending and receiving.
 			// This is different from WebRTC which uses DTLS-SRTP key exchange with separate keys.
-			// The decoded key contains: master key (16 bytes) + master salt (14 bytes) = 30 bytes
 			// In RTSP pull scenarios, we only receive (decrypt) RTP packets, but we pass the same
 			// key for both directions to SetKeyMaterial for API consistency with the SRTP library.
+			// Both parameters receive key_data intentionally.
 			if (!_srtp_transport->SetKeyMaterial(crypto_suite.value(), key_data, key_data))
 			{
 				SetState(State::ERROR);

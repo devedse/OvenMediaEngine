@@ -607,7 +607,8 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 					id,
 					match.GetGroupAt(2).GetValue());
 			}
-			else if (content.compare(0, OV_COUNTOF("crypto:") - 1, "crypto:") == 0)
+			constexpr size_t CRYPTO_PREFIX_LEN = 7; // Length of "crypto:"
+			else if (content.compare(0, CRYPTO_PREFIX_LEN, "crypto:") == 0)
 			{
 				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
 				// Regex returns 4 capture groups + 1 full match = 5 total
@@ -1162,7 +1163,7 @@ std::optional<MediaDescription::CryptoAttr> MediaDescription::GetCrypto(uint32_t
 
 std::optional<MediaDescription::CryptoAttr> MediaDescription::GetFirstCrypto() const
 {
-	if (_crypto_list.empty() == false)
+	if (!_crypto_list.empty())
 	{
 		return _crypto_list.front();
 	}

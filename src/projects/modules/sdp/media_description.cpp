@@ -607,6 +607,19 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 					id,
 					match.GetGroupAt(2).GetValue());
 			}
+			else if (content.compare(0, OV_COUNTOF("cry") - 1, "cry") == 0)
+			{
+				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
+				auto match = SDPRegexPattern::GetInstance()->MatchCrypto(content.c_str());
+				if (match.GetGroupCount() >= 3 + 1)
+				{
+					AddCrypto(
+						ov::Converter::ToUInt32(match.GetGroupAt(1).GetValue().CStr()),
+						match.GetGroupAt(2).GetValue(),
+						match.GetGroupAt(3).GetValue(),
+						match.GetGroupAt(4).GetValue());
+				}
+			}
 			else if (ParsingCommonAttrLine(type, content))
 			{
 			}
@@ -1116,6 +1129,42 @@ bool MediaDescription::FindExtmapItem(const ov::String &keyword, uint8_t &id, ov
 	}
 
 	return false;
+}
+
+void MediaDescription::AddCrypto(uint32_t tag, const ov::String &crypto_suite, const ov::String &key_params, const ov::String &session_params)
+{
+	CryptoAttr crypto;
+	crypto.tag = tag;
+	crypto.crypto_suite = crypto_suite;
+	crypto.key_params = key_params;
+	crypto.session_params = session_params;
+	_crypto_list.push_back(crypto);
+}
+
+const std::vector<MediaDescription::CryptoAttr>& MediaDescription::GetCryptoList() const
+{
+	return _crypto_list;
+}
+
+std::optional<MediaDescription::CryptoAttr> MediaDescription::GetCrypto(uint32_t tag) const
+{
+	for (const auto &crypto : _crypto_list)
+	{
+		if (crypto.tag == tag)
+		{
+			return crypto;
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<MediaDescription::CryptoAttr> MediaDescription::GetFirstCrypto() const
+{
+	if (_crypto_list.empty() == false)
+	{
+		return _crypto_list.front();
+	}
+	return std::nullopt;
 }
 
 // a=rtpmap:96 VP8/50000

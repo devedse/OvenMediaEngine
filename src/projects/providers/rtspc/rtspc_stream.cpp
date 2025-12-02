@@ -686,8 +686,8 @@ namespace pvd
 				return false;
 			}
 
-			// Parse crypto suite - default to invalid value
-			uint64_t crypto_suite = 0xFFFFFFFFFFFFFFFF;
+			// Parse crypto suite
+			std::optional<uint64_t> crypto_suite = std::nullopt;
 			if (crypto_attr->crypto_suite == "AES_CM_128_HMAC_SHA1_80")
 			{
 				crypto_suite = SRTP_AES128_CM_SHA1_80;
@@ -702,7 +702,7 @@ namespace pvd
 			}
 			
 			// Validate that a supported crypto suite was found
-			if (crypto_suite == 0xFFFFFFFFFFFFFFFF)
+			if (!crypto_suite.has_value())
 			{
 				SetState(State::ERROR);
 				logte("Unsupported SRTP crypto suite: %s", crypto_attr->crypto_suite.CStr());
@@ -723,7 +723,7 @@ namespace pvd
 			// The decoded key contains: master key (16 bytes) + master salt (14 bytes) = 30 bytes
 			// In RTSP pull scenarios, we only receive (decrypt) RTP packets, but we pass the same
 			// key for both directions to SetKeyMaterial for API consistency with the SRTP library.
-			if (!_srtp_transport->SetKeyMaterial(crypto_suite, key_data, key_data))
+			if (!_srtp_transport->SetKeyMaterial(crypto_suite.value(), key_data, key_data))
 			{
 				SetState(State::ERROR);
 				logte("Failed to set SRTP key material");

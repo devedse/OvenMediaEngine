@@ -610,9 +610,10 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 			else if (content.compare(0, OV_COUNTOF("crypto:") - 1, "crypto:") == 0)
 			{
 				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
+				// Regex returns 4 capture groups + 1 full match = 5 total
+				constexpr size_t CRYPTO_REGEX_GROUP_COUNT = 5;
 				auto match = SDPRegexPattern::GetInstance()->MatchCrypto(content.c_str());
-				// Expect 4 capture groups + 1 full match = 5 total
-				if (match.GetGroupCount() == 5)
+				if (match.GetGroupCount() == CRYPTO_REGEX_GROUP_COUNT)
 				{
 					AddCrypto(
 						ov::Converter::ToUInt32(match.GetGroupAt(1).GetValue().CStr()),

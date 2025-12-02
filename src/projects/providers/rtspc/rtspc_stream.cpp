@@ -710,11 +710,13 @@ namespace pvd
 			}
 
 			// Decode base64 key
+			// SRTP key material: master key (16 bytes) + master salt (14 bytes) = 30 bytes
+			constexpr size_t SRTP_KEY_MATERIAL_LENGTH = 30;
 			auto key_data = ov::Base64::Decode(crypto_attr->key_params);
-			if (key_data == nullptr || key_data->GetLength() < 30)
+			if (key_data == nullptr || key_data->GetLength() < SRTP_KEY_MATERIAL_LENGTH)
 			{
 				SetState(State::ERROR);
-				logte("Failed to decode SRTP key or key is too short");
+				logte("Failed to decode SRTP key or key is too short (expected at least %zu bytes)", SRTP_KEY_MATERIAL_LENGTH);
 				return false;
 			}
 

@@ -11,7 +11,9 @@
 
 #include <base/info/application.h>
 #include <base/ovlibrary/byte_io.h>
+#include <base/ovcrypto/base_64.h>
 #include <modules/rtp_rtcp/rtp_depacketizer_mpeg4_generic_audio.h>
+#include <openssl/srtp.h>
 
 #include "rtspc_provider.h"
 
@@ -85,6 +87,11 @@ namespace pvd
 
 	void RtspcStream::Release()
 	{
+		if (_srtp_transport != nullptr)
+		{
+			_srtp_transport->Stop();
+		}
+
 		if (_rtp_rtcp != nullptr)
 		{
 			_rtp_rtcp->Stop();
@@ -381,7 +388,32 @@ namespace pvd
 
 		_rtp_rtcp = std::make_shared<RtpRtcp>(RtpRtcpInterface::GetSharedPtr());
 
+		// Check if SRTP is used by examining the SDP
 		auto media_desc_list = _sdp.GetMediaList();
+		for (const auto &media_desc : media_desc_list)
+		{
+			// Check for crypto attribute in SDP
+			auto crypto_attr = media_desc->GetFirstCrypto();
+			if (crypto_attr.has_value())
+			{
+				_use_srtp = true;
+				logti("SRTP detected in SDP with crypto suite: %s", crypto_attr->crypto_suite.CStr());
+				break;
+			}
+		}
+
+		// If SRTP is used, create and configure SRTP transport
+		if (_use_srtp)
+		{
+			_srtp_transport = std::make_shared<SrtpTransport>();
+			if (_srtp_transport == nullptr)
+			{
+				SetState(State::ERROR);
+				logte("Could not create SRTP transport for RTSP stream");
+				return false;
+			}
+		}
+
 		for (const auto &media_desc : media_desc_list)
 		{
 			if (media_desc->GetMediaType() == MediaDescription::MediaType::Application || media_desc->GetMediaType() == MediaDescription::MediaType::Unknown)
@@ -632,11 +664,99 @@ namespace pvd
 			interleaved_channel += 2;
 		}
 
+		// Configure SRTP if needed
+		if (_use_srtp && _srtp_transport != nullptr)
+		{
+			// Validate we have media descriptions
+			if (media_desc_list.empty())
+			{
+				SetState(State::ERROR);
+				logte("SRTP is enabled but no media descriptions found in SDP");
+				return false;
+			}
+
+			// Get crypto attribute from the first media description
+			auto first_media_desc = media_desc_list[0];
+			auto crypto_attr = first_media_desc->GetFirstCrypto();
+			
+			if (!crypto_attr.has_value())
+			{
+				SetState(State::ERROR);
+				logte("SRTP is enabled but no crypto attribute found in SDP");
+				return false;
+			}
+
+			// Parse crypto suite
+			std::optional<uint64_t> crypto_suite = std::nullopt;
+			if (crypto_attr->crypto_suite == "AES_CM_128_HMAC_SHA1_80")
+			{
+				crypto_suite = SRTP_AES128_CM_SHA1_80;
+			}
+			else if (crypto_attr->crypto_suite == "AES_CM_128_HMAC_SHA1_32")
+			{
+				crypto_suite = SRTP_AES128_CM_SHA1_32;
+			}
+			else if (crypto_attr->crypto_suite == "AEAD_AES_128_GCM")
+			{
+				crypto_suite = SRTP_AEAD_AES_128_GCM;
+			}
+			
+			// Validate that a supported crypto suite was found
+			if (!crypto_suite.has_value())
+			{
+				SetState(State::ERROR);
+				logte("Unsupported SRTP crypto suite: %s", crypto_attr->crypto_suite.CStr());
+				return false;
+			}
+
+			// Decode base64 key
+			// SRTP key material: master key (16 bytes) + master salt (14 bytes) = 30 bytes
+			constexpr size_t SRTP_KEY_MATERIAL_LENGTH = 30;
+			auto key_data = ov::Base64::Decode(crypto_attr->key_params);
+			if (key_data == nullptr || key_data->GetLength() != SRTP_KEY_MATERIAL_LENGTH)
+			{
+				SetState(State::ERROR);
+				logte("Failed to decode SRTP key or invalid key length (expected exactly %zu bytes, got %zu)", 
+					  SRTP_KEY_MATERIAL_LENGTH, 
+					  key_data ? key_data->GetLength() : 0);
+				return false;
+			}
+
+			// For RTSP SRTP (RFC 4568), the same key material is used for both sending and receiving.
+			// This is different from WebRTC which uses DTLS-SRTP key exchange with separate keys.
+			// In RTSP pull scenarios, we only receive (decrypt) RTP packets, but we pass the same
+			// key for both directions to SetKeyMaterial for API consistency with the SRTP library.
+			// Both parameters receive key_data intentionally.
+			if (!_srtp_transport->SetKeyMaterial(crypto_suite.value(), key_data, key_data))
+			{
+				SetState(State::ERROR);
+				logte("Failed to set SRTP key material");
+				return false;
+			}
+
+			logti("SRTP transport configured with crypto suite: %s", crypto_attr->crypto_suite.CStr());
+		}
+
 		_rtp_rtcp->RegisterPrevNode(nullptr);
-		_rtp_rtcp->RegisterNextNode(ov::Node::GetSharedPtr());
+		
+		if (_use_srtp && _srtp_transport != nullptr)
+		{
+			// Chain: RtpRtcp -> SrtpTransport -> RtspcStream
+			_rtp_rtcp->RegisterNextNode(_srtp_transport);
+			_srtp_transport->RegisterPrevNode(_rtp_rtcp);
+			_srtp_transport->RegisterNextNode(ov::Node::GetSharedPtr());
+			_srtp_transport->Start();
+			RegisterPrevNode(_srtp_transport);
+		}
+		else
+		{
+			// Chain: RtpRtcp -> RtspcStream
+			_rtp_rtcp->RegisterNextNode(ov::Node::GetSharedPtr());
+			RegisterPrevNode(_rtp_rtcp);
+		}
+		
 		_rtp_rtcp->Start();
 
-		RegisterPrevNode(_rtp_rtcp);
 		RegisterNextNode(nullptr);
 
 		return true;

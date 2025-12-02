@@ -24,6 +24,7 @@
 #include <modules/sdp/session_description.h>
 
 #include <modules/rtsp/header_fields/rtsp_header_fields.h>
+#include <modules/dtls_srtp/srtp_transport.h>
 
 #define RTSP_USER_AGENT_NAME				"OvenMediaEngine"
 #define DEFAULT_RTSP_SESSION_TIMEOUT_SEC	30
@@ -157,6 +158,8 @@ namespace pvd
 
 		// Rtp
 		std::shared_ptr<RtpRtcp>            _rtp_rtcp;
+		std::shared_ptr<SrtpTransport>      _srtp_transport;
+		bool                                _use_srtp = false;
 		// Payload type, Depacketizer
 		std::map<uint8_t, std::shared_ptr<RtpDepacketizingManager>> _depacketizers;
 		// Payload type : Timestamp

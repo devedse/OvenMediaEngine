@@ -607,6 +607,22 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 					id,
 					match.GetGroupAt(2).GetValue());
 			}
+			constexpr size_t CRYPTO_PREFIX_LEN = 7; // Length of "crypto:"
+			else if (content.compare(0, CRYPTO_PREFIX_LEN, "crypto:") == 0)
+			{
+				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
+				// Regex returns 4 capture groups + 1 full match = 5 total
+				constexpr size_t CRYPTO_REGEX_GROUP_COUNT = 5;
+				auto match = SDPRegexPattern::GetInstance()->MatchCrypto(content.c_str());
+				if (match.GetGroupCount() == CRYPTO_REGEX_GROUP_COUNT)
+				{
+					AddCrypto(
+						ov::Converter::ToUInt32(match.GetGroupAt(1).GetValue().CStr()),
+						match.GetGroupAt(2).GetValue(),
+						match.GetGroupAt(3).GetValue(),
+						match.GetGroupAt(4).GetValue());
+				}
+			}
 			else if (ParsingCommonAttrLine(type, content))
 			{
 			}
@@ -1116,6 +1132,42 @@ bool MediaDescription::FindExtmapItem(const ov::String &keyword, uint8_t &id, ov
 	}
 
 	return false;
+}
+
+void MediaDescription::AddCrypto(uint32_t tag, const ov::String &crypto_suite, const ov::String &key_params, const ov::String &session_params)
+{
+	CryptoAttr crypto;
+	crypto.tag = tag;
+	crypto.crypto_suite = crypto_suite;
+	crypto.key_params = key_params;
+	crypto.session_params = session_params;
+	_crypto_list.push_back(crypto);
+}
+
+const std::vector<MediaDescription::CryptoAttr>& MediaDescription::GetCryptoList() const
+{
+	return _crypto_list;
+}
+
+std::optional<MediaDescription::CryptoAttr> MediaDescription::GetCrypto(uint32_t tag) const
+{
+	for (const auto &crypto : _crypto_list)
+	{
+		if (crypto.tag == tag)
+		{
+			return crypto;
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<MediaDescription::CryptoAttr> MediaDescription::GetFirstCrypto() const
+{
+	if (!_crypto_list.empty())
+	{
+		return _crypto_list.front();
+	}
+	return std::nullopt;
 }
 
 // a=rtpmap:96 VP8/50000

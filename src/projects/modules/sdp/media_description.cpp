@@ -607,7 +607,7 @@ bool MediaDescription::ParsingMediaLine(char type, std::string content)
 					id,
 					match.GetGroupAt(2).GetValue());
 			}
-			else if (content.compare(0, OV_COUNTOF("cry") - 1, "cry") == 0)
+			else if (content.compare(0, OV_COUNTOF("crypto") - 1, "crypto") == 0)
 			{
 				// a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:base64key
 				auto match = SDPRegexPattern::GetInstance()->MatchCrypto(content.c_str());

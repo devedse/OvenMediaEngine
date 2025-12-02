@@ -740,7 +740,6 @@ namespace pvd
 		
 		_rtp_rtcp->Start();
 
-		RegisterPrevNode(_rtp_rtcp);
 		RegisterNextNode(nullptr);
 
 		return true;

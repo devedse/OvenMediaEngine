@@ -718,8 +718,11 @@ namespace pvd
 				return false;
 			}
 
-			// For RTSP SRTP, the key material is used for both sending and receiving
+			// For RTSP SRTP (RFC 4568), the same key material is used for both sending and receiving.
+			// This is different from WebRTC which uses DTLS-SRTP key exchange with separate keys.
 			// The decoded key contains: master key (16 bytes) + master salt (14 bytes) = 30 bytes
+			// In RTSP pull scenarios, we only receive (decrypt) RTP packets, but we pass the same
+			// key for both directions to SetKeyMaterial for API consistency with the SRTP library.
 			if (!_srtp_transport->SetKeyMaterial(crypto_suite, key_data, key_data))
 			{
 				SetState(State::ERROR);

@@ -247,6 +247,14 @@ namespace pvd
             return false;
         }
 
+        // Defensive: ensure the stream ID survives the copy-constructor chain
+        // through the multiple-inheritance hierarchy (info::Stream -> pvd::Stream -> MultiplexStream).
+        // Without this, all multiplex streams end up with ID 0.
+        logti("Multiplex stream '%s' created with ID %u (from stream_info ID %u, stream object ID before fix: %u)",
+              stream_info.GetName().CStr(), stream_info.GetId(), stream_info.GetId(), stream->GetId());
+        stream->SetId(stream_info.GetId());
+        logti("Multiplex stream '%s' ID after SetId: %u", stream_info.GetName().CStr(), stream->GetId());
+
         if (stream->Start() == false)
         {
             logte("Failed to add multiplex (Could not start stream): %s", multiplex_file_info._file_path.CStr());
@@ -330,6 +338,12 @@ namespace pvd
             logte("Failed to add multiplex (Could not create stream): %s", multiplex_file_info._file_path.CStr());
             return false;
         }
+
+        // Defensive: ensure the stream ID survives the copy-constructor chain
+        logti("Multiplex stream '%s' (update) created with ID %u (stream object ID before fix: %u)",
+              stream_info.GetName().CStr(), stream_info.GetId(), new_stream->GetId());
+        new_stream->SetId(stream_info.GetId());
+        logti("Multiplex stream '%s' (update) ID after SetId: %u", stream_info.GetName().CStr(), new_stream->GetId());
 
         if (new_stream->Start() == false)
         {
